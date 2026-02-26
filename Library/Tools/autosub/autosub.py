@@ -370,7 +370,12 @@ def main():
     parser.add_argument("--cn-color", default="Gold")
     parser.add_argument("--en-color", default="White")
     parser.add_argument("--no-bg-box", action="store_true")
+    parser.add_argument("--download-dir", default=None, help="Override download directory")
     args = parser.parse_args()
+
+    global BASE_OUTPUT_DIR
+    if args.download_dir:
+        BASE_OUTPUT_DIR = args.download_dir
 
     # 0. Intelligent Project Naming
     if args.input.startswith("http"):

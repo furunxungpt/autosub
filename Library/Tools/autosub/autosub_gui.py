@@ -143,6 +143,11 @@ class AutoSubGUI:
         ttk.Entry(input_frame, textvariable=self.cookies_var, width=50).grid(row=1, column=1, padx=5, pady=2)
         ttk.Button(input_frame, text="选择...", command=self.browse_cookies).grid(row=1, column=2)
 
+        tk.Label(input_frame, text="下载目录:").grid(row=2, column=0, sticky="w")
+        self.download_dir_var = tk.StringVar(value=r"D:\0000\download")
+        ttk.Entry(input_frame, textvariable=self.download_dir_var, width=50).grid(row=2, column=1, padx=5, pady=2)
+        ttk.Button(input_frame, text="选择...", command=self.browse_download_dir).grid(row=2, column=2)
+
         # --- Settings Section ---
         settings_frame = ttk.LabelFrame(root, text="基础设置 (Basic Settings)", padding=10)
         settings_frame.pack(fill="x", padx=10, pady=5)
@@ -154,7 +159,9 @@ class AutoSubGUI:
             "OpenAI (ChatGPT)": "openai",
             "Moonshot (Kimi)": "moonshot",
             "Alibaba (Qwen)": "dashscope",
-            "Zhipu (GLM)": "zhipu"
+            "Zhipu (GLM)": "zhipu",
+            "DeepSeek": "deepseek",
+            "硅基流动 (SiliconFlow)": "siliconflow"
         }
         vendor_default = self.settings.get("llm_vendor", "Google Gemini")
         self.vendor_var = tk.StringVar(value=vendor_default)
@@ -323,6 +330,36 @@ class AutoSubGUI:
         filename = filedialog.askopenfilename(filetypes=[("Txt", "*.txt")])
         if filename: self.cookies_var.set(filename)
 
+    def browse_download_dir(self):
+        dirname = filedialog.askdirectory(initialdir=self.download_dir_var.get())
+        if dirname: self.download_dir_var.set(dirname)
+
+    def _get_current_env_key(self):
+        """Get the env var name for the currently selected vendor."""
+        vendor_id = self.vendor_display_map.get(self.vendor_var.get(), "gemini")
+        env_map = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "moonshot": "MOONSHOT_API_KEY",
+            "dashscope": "DASHSCOPE_API_KEY",
+            "zhipu": "ZHIPUAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "siliconflow": "SILICONFLOW_API_KEY"
+        }
+        return env_map.get(vendor_id, "GEMINI_API_KEY")
+
+    def _apply_gui_key_to_env(self):
+        """Apply the GUI API key entry to os.environ so it works without saving."""
+        key = self.api_key_var.get().strip()
+        if key:
+            env_key = self._get_current_env_key()
+            os.environ[env_key] = key
+            # Reset cached LLM client so it picks up the new key
+            try:
+                llm_utils._CLIENT = None
+            except:
+                pass
+
     def log_clear(self):
         self.log_text.config(state="normal")
         self.log_text.delete(1.0, "end")
@@ -373,6 +410,8 @@ class AutoSubGUI:
         self.log(f"--- 任务启动: {input_val} ---")
         self.progress_var.set(0)
         
+        self._apply_gui_key_to_env()
+
         cmd = [sys.executable, AUTOSUB_SCRIPT, input_val]
         cmd.extend(["--model", self.model_var.get()])
         cmd.extend(["--llm-model", self.llm_model_var.get()])
@@ -398,6 +437,10 @@ class AutoSubGUI:
         
         if self.cookies_var.get():
             cmd.extend(["--cookies", self.cookies_var.get()])
+
+        download_dir = self.download_dir_var.get().strip()
+        if download_dir:
+            cmd.extend(["--download-dir", download_dir])
             
         threading.Thread(target=self.run_subprocess, args=(cmd,), daemon=True).start()
 
@@ -442,7 +485,9 @@ class AutoSubGUI:
             "openai": "OPENAI_API_KEY",
             "moonshot": "MOONSHOT_API_KEY",
             "dashscope": "DASHSCOPE_API_KEY",
-            "zhipu": "ZHIPUAI_API_KEY"
+            "zhipu": "ZHIPUAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "siliconflow": "SILICONFLOW_API_KEY"
         }
         env_key = env_map[vendor_id]
         
@@ -459,6 +504,7 @@ class AutoSubGUI:
 
     def fetch_models_for_vendor(self, vendor_id, env_key):
         try:
+            self._apply_gui_key_to_env()
             from llm_utils import LLMProvider, LLMClient
             provider = LLMProvider(vendor_id)
             client = LLMClient() # Will use existing env vars
@@ -495,6 +541,8 @@ class AutoSubGUI:
                 elif "gpt-4o-mini" in models: self.llm_model_var.set("gpt-4o-mini")
                 elif "glm-4-flash" in models: self.llm_model_var.set("glm-4-flash")
                 elif "moonshot-v1-8k" in models: self.llm_model_var.set("moonshot-v1-8k")
+                elif "deepseek-chat" in models: self.llm_model_var.set("deepseek-chat")
+                elif "deepseek-ai/DeepSeek-V3" in models: self.llm_model_var.set("deepseek-ai/DeepSeek-V3")
                 elif models: self.llm_model_var.set(models[0])
                 
             self.model_status_label.config(text="")
@@ -513,7 +561,9 @@ class AutoSubGUI:
             "openai": "OPENAI_API_KEY",
             "moonshot": "MOONSHOT_API_KEY",
             "dashscope": "DASHSCOPE_API_KEY",
-            "zhipu": "ZHIPUAI_API_KEY"
+            "zhipu": "ZHIPUAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "siliconflow": "SILICONFLOW_API_KEY"
         }
         env_key = env_map[vendor_id]
         
@@ -534,6 +584,8 @@ class AutoSubGUI:
             "MOONSHOT_API_KEY": tk.StringVar(value=os.environ.get("MOONSHOT_API_KEY", "")),
             "DASHSCOPE_API_KEY": tk.StringVar(value=os.environ.get("DASHSCOPE_API_KEY", "")),
             "ZHIPUAI_API_KEY": tk.StringVar(value=os.environ.get("ZHIPUAI_API_KEY", "")),
+            "DEEPSEEK_API_KEY": tk.StringVar(value=os.environ.get("DEEPSEEK_API_KEY", "")),
+            "SILICONFLOW_API_KEY": tk.StringVar(value=os.environ.get("SILICONFLOW_API_KEY", "")),
         }
 
         labels = [
@@ -542,6 +594,8 @@ class AutoSubGUI:
             ("Moonshot (Kimi):", "MOONSHOT_API_KEY"),
             ("DashScope (Qwen):", "DASHSCOPE_API_KEY"),
             ("Zhipu (GLM):", "ZHIPUAI_API_KEY"),
+            ("DeepSeek API Key:", "DEEPSEEK_API_KEY"),
+            ("SiliconFlow API Key:", "SILICONFLOW_API_KEY"),
         ]
 
         for i, (label_text, key_name) in enumerate(labels):
@@ -620,6 +674,7 @@ class AutoSubGUI:
 
     def _run_test_api(self):
         try:
+            self._apply_gui_key_to_env()
             from llm_utils import LLMClient
             client = LLMClient()
             model_name = self.llm_model_var.get()

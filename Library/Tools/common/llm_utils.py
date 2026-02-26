@@ -40,6 +40,8 @@ class LLMProvider(Enum):
     MOONSHOT = "moonshot"
     DASHSCOPE = "dashscope"
     ZHIPU = "zhipu"
+    DEEPSEEK = "deepseek"
+    SILICONFLOW = "siliconflow"
 
 class RateLimiter:
     """Simple thread-safe rate limiter based on RPM."""
@@ -70,6 +72,8 @@ class LLMClient:
             LLMProvider.MOONSHOT: os.environ.get("MOONSHOT_API_KEY"),
             LLMProvider.DASHSCOPE: os.environ.get("DASHSCOPE_API_KEY"),
             LLMProvider.ZHIPU: os.environ.get("ZHIPUAI_API_KEY") or os.environ.get("ZHIPU_API_KEY"),
+            LLMProvider.DEEPSEEK: os.environ.get("DEEPSEEK_API_KEY"),
+            LLMProvider.SILICONFLOW: os.environ.get("SILICONFLOW_API_KEY"),
         }
         
         # Default tier settings
@@ -93,6 +97,8 @@ class LLMClient:
         if "moonshot" in model_name or "kimi" in model_name: return LLMProvider.MOONSHOT
         if "qwen" in model_name: return LLMProvider.DASHSCOPE
         if "glm" in model_name: return LLMProvider.ZHIPU
+        if "deepseek" in model_name: return LLMProvider.DEEPSEEK
+        if "siliconflow" in model_name or "sf-" in model_name: return LLMProvider.SILICONFLOW
         return LLMProvider.GEMINI
 
     def _call_openai_compatible(self, model_name: str, prompt: str, base_url: str, api_key: str) -> Optional[str]:
@@ -163,6 +169,12 @@ class LLMClient:
         elif provider == LLMProvider.ZHIPU:
             return self._call_openai_compatible(model_name, prompt, "https://open.bigmodel.cn/api/paas/v4", self.api_keys[LLMProvider.ZHIPU])
             
+        elif provider == LLMProvider.DEEPSEEK:
+            return self._call_openai_compatible(model_name, prompt, "https://api.deepseek.com/v1", self.api_keys[LLMProvider.DEEPSEEK])
+
+        elif provider == LLMProvider.SILICONFLOW:
+            return self._call_openai_compatible(model_name, prompt, "https://api.siliconflow.cn/v1", self.api_keys[LLMProvider.SILICONFLOW])
+
         return None
 
     def generate_batch(self, tasks: List[Dict], model_name: str = "gemini-1.5-flash") -> List[Dict]:
@@ -199,7 +211,9 @@ class LLMClient:
             LLMProvider.OPENAI: "https://api.openai.com/v1",
             LLMProvider.MOONSHOT: "https://api.moonshot.cn/v1",
             LLMProvider.DASHSCOPE: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            LLMProvider.ZHIPU: "https://open.bigmodel.cn/api/paas/v4"
+            LLMProvider.ZHIPU: "https://open.bigmodel.cn/api/paas/v4",
+            LLMProvider.DEEPSEEK: "https://api.deepseek.com/v1",
+            LLMProvider.SILICONFLOW: "https://api.siliconflow.cn/v1"
         }
         
         base_url = base_urls.get(provider)
@@ -225,7 +239,9 @@ class LLMClient:
             brand_map = {
                 LLMProvider.DASHSCOPE: "qwen",
                 LLMProvider.ZHIPU: "glm",
-                LLMProvider.MOONSHOT: "moonshot"
+                LLMProvider.MOONSHOT: "moonshot",
+                LLMProvider.DEEPSEEK: "deepseek",
+                LLMProvider.SILICONFLOW: "sf-"
             }
             brand = brand_map.get(provider, "")
             
@@ -248,7 +264,9 @@ class LLMClient:
                     LLMProvider.OPENAI: ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
                     LLMProvider.MOONSHOT: ["moonshot-v1-8k", "moonshot-v1-32k"],
                     LLMProvider.DASHSCOPE: ["qwen-turbo", "qwen-max"],
-                    LLMProvider.ZHIPU: ["glm-4-flash", "glm-4"]
+                    LLMProvider.ZHIPU: ["glm-4-flash", "glm-4"],
+                    LLMProvider.DEEPSEEK: ["deepseek-chat", "deepseek-reasoner"],
+                    LLMProvider.SILICONFLOW: ["deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct"]
                 }
                 return fallbacks.get(provider, [])
                 
@@ -259,7 +277,9 @@ class LLMClient:
                 LLMProvider.OPENAI: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
                 LLMProvider.MOONSHOT: ["moonshot-v1-8k", "moonshot-v1-32k"],
                 LLMProvider.DASHSCOPE: ["qwen-turbo", "qwen-max", "qwen-plus"],
-                LLMProvider.ZHIPU: ["glm-4-flash", "glm-4", "glm-4-air"]
+                LLMProvider.ZHIPU: ["glm-4-flash", "glm-4", "glm-4-air"],
+                LLMProvider.DEEPSEEK: ["deepseek-chat", "deepseek-reasoner"],
+                LLMProvider.SILICONFLOW: ["deepseek-ai/DeepSeek-V3", "Qwen/Qwen2.5-72B-Instruct"]
             }
             return fallbacks.get(provider, [])
 

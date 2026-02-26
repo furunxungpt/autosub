@@ -35,13 +35,16 @@ except ImportError:
 if getattr(sys, 'frozen', False):
     DOWNLOAD_ROOT = os.path.join(os.path.expanduser("~"), "Documents", "AutoSub", "Downloads")
 else:
-    DOWNLOAD_ROOT = r"d:\cc\download"
+    DOWNLOAD_ROOT = r"D:\0000\download"
 
 def log(message):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}")
 
-def download_video(url, custom_cookies=None):
+def download_video(url, custom_cookies=None, output_dir=None):
+    global DOWNLOAD_ROOT
+    if output_dir:
+        DOWNLOAD_ROOT = output_dir
     # Early detection: Check if URL is already a direct stream
     is_direct_stream = any([
         '.m3u8' in url,
@@ -115,7 +118,7 @@ def download_video(url, custom_cookies=None):
         'writethumbnail': False,
         
         # Verbosity
-        'quiet': True,
+        'quiet': False,
         'no_warnings': False,
         
         'js_runtime': 'node',
