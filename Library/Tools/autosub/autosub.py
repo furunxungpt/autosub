@@ -358,7 +358,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input")
     parser.add_argument("--model", default="large-v3-turbo")
-    parser.add_argument("--llm-model", default="gemini-3.1-pro-preview")
+    parser.add_argument("--llm-model", default="gemini-1.5-flash", help="LLM Model (gemini-1.5-flash, gpt-4o, moonshot-v1-8k, qwen-plus, glm-4, etc.)")
     parser.add_argument("--style", default="casual")
     parser.add_argument("--cookies")
     parser.add_argument("--layout", default="bilingual")

@@ -5,7 +5,6 @@ import argparse
 import math
 import time
 import re
-import google.generativeai as genai
 from typing import List, Dict
 import io
 
@@ -34,9 +33,15 @@ sys.path.append(os.path.join(TOOLS_DIR, "common"))
 
 try:
     import gemini_utils
+except ImportError as e:
+    print(f"Warning: gemini_utils not found ({e}). Using llm_utils only.")
+
+try:
     import srt_utils
-except ImportError:
-    print("Warning: gemini_utils or srt_utils not found. Concurrent processing disabled.")
+except ImportError as e:
+    print(f"❌ Error: srt_utils is mandatory and was not found: {e}")
+    print(f"Current sys.path: {sys.path}")
+    sys.exit(1)
 
 # --- SKILL INTEGRATION ---
 
@@ -59,20 +64,15 @@ SUBTRANSLATOR_RULES = load_skill_rules("subtranslator")
 
 
 
-# Retrieve API Key from environment
+# Retrieve API Keys from environment
 try:
     from dotenv import load_dotenv
     load_dotenv(ENV_PATH)
 except ImportError:
     pass
 
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-
-if not GEMINI_KEY:
-    print("Error: GEMINI_API_KEY not set in environment or .env file.")
-    sys.exit(1)
-
-genai.configure(api_key=GEMINI_KEY)
+import llm_utils
+client = llm_utils.get_client()
 
 def get_context_window(blocks: List[Dict], index: int, window_size: int = 2) -> Dict:
     """
@@ -86,7 +86,7 @@ def get_context_window(blocks: List[Dict], index: int, window_size: int = 2) -> 
     
     return {"prev": prev_text, "next": next_text}
 
-def smart_translate_chunk(chunk_blocks: List[Dict], style: str = "casual") -> List[Dict]:
+def smart_translate_chunk(chunk_blocks: List[Dict], style: str = "casual", model_name: str = "gemini-1.5-flash") -> List[Dict]:
     """
     Translates a chunk of subtitle blocks using context-aware prompting.
     """
@@ -127,12 +127,11 @@ OUTPUT FORMAT:
 ...
 """
     
-    model = genai.GenerativeModel(os.environ.get("GEMINI_MODEL", "gemini-3-flash"))
-    
     try:
-        response = model.generate_content(prompt)
-        translated_text = response.text.strip()
-        
+        translated_text = client.generate_content(prompt, model_name=model_name)
+        if not translated_text:
+            return chunk_blocks
+            
         # Parse the Output
         translated_map = {}
         for line in translated_text.split('\n'):
@@ -427,11 +426,9 @@ OUTPUT FORMAT:
 
     # Execute Batch
     try:
-        client = gemini_utils.GeminiClient() # Auto-detects tier
-        # Use user-specified model, or default to gemini-3-pro. 
-        # generate_batch now supports fallback automatically if using generate_content internally.
+        # Use user-specified model, or default to gemini-1.5-flash.
         target_model = args.model
-        print(f"🚀 Using LLM: {target_model} (with auto-fallback)...")
+        print(f"🚀 Using LLM: {target_model}...")
         
         results = client.generate_batch(tasks, target_model)
         

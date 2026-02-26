@@ -10,7 +10,7 @@ A fully automated "zero-click" workflow to generate professional bilingual subti
 ## Workflow
 1.  **Download**: Fetches video from URL (YouTube/X/Bilibili) using `vdown`.
 2.  **Transcribe**: Generates English SRT using `transcriber` (Whisper Large V2).
-3.  **Translate**: Translates to Chinese using Gemini Flash 1.5 with "Humanizer" style rules.
+3.  **Translate**: Translates to Chinese using AI (Gemini, ChatGPT, Kimi, Qwen, or GLM) with "Humanizer" style rules.
 4.  **Burn**: Generates `hardsub` video with professional vector-box styling (`hardsubber`).
 
 ## Usage

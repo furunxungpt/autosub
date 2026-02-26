@@ -71,7 +71,7 @@ AUTOSUB_SCRIPT = os.path.join(CURRENT_DIR, "autosub.py")
 sys.path.append(os.path.join(CURRENT_DIR, "..", "common"))
 
 try:
-    import gemini_utils
+    import llm_utils
 except ImportError:
     pass
 
@@ -147,52 +147,57 @@ class AutoSubGUI:
         settings_frame = ttk.LabelFrame(root, text="基础设置 (Basic Settings)", padding=10)
         settings_frame.pack(fill="x", padx=10, pady=5)
         
-        # API Key Row
-        tk.Label(settings_frame, text="Gemini Key:").grid(row=0, column=0, sticky="w")
-        
-        # Load from env initialy
-        initial_key = os.environ.get("GEMINI_API_KEY", "")
-        if not initial_key:
-             # Try reading file manually if not in env for some reason
-             if os.path.exists(ENV_PATH):
-                 with open(ENV_PATH, 'r') as f:
-                     for l in f:
-                         if l.startswith("GEMINI_API_KEY="):
-                             initial_key = l.split("=", 1)[1].strip()
-                             break
+        # API Vendor Row
+        tk.Label(settings_frame, text="模型厂商:").grid(row=0, column=0, sticky="w")
+        self.vendor_display_map = {
+            "Google Gemini": "gemini",
+            "OpenAI (ChatGPT)": "openai",
+            "Moonshot (Kimi)": "moonshot",
+            "Alibaba (Qwen)": "dashscope",
+            "Zhipu (GLM)": "zhipu"
+        }
+        vendor_default = self.settings.get("llm_vendor", "Google Gemini")
+        self.vendor_var = tk.StringVar(value=vendor_default)
+        self.vendor_combo = ttk.Combobox(settings_frame, textvariable=self.vendor_var, values=list(self.vendor_display_map.keys()), width=15, state="readonly")
+        self.vendor_combo.grid(row=0, column=1, sticky="w", padx=5)
+        self.vendor_combo.bind("<<ComboboxSelected>>", self.on_vendor_change)
 
-        self.api_key_var = tk.StringVar(value=initial_key)
-        self.api_key_entry = ttk.Entry(settings_frame, textvariable=self.api_key_var, width=35, show="*")
-        self.api_key_entry.grid(row=0, column=1, columnspan=2, sticky="w", padx=5)
-        
-        ttk.Button(settings_frame, text="保存 (Save)", command=self.save_api_key, width=10).grid(row=0, column=3, sticky="w", padx=5)
-        
-        # Model (Whisper)
-        tk.Label(settings_frame, text="转录模型:").grid(row=1, column=0, sticky="w")
-        self.model_var = tk.StringVar(value=self.settings.get("model", "large-v2"))
-        ttk.Combobox(settings_frame, textvariable=self.model_var, values=["large-v3-turbo", "large-v3", "large-v2", "medium"], width=15, state="readonly").grid(row=1, column=1, sticky="w", padx=5)
-        
         # LLM Model (Translation)
-        tk.Label(settings_frame, text="翻译模型:").grid(row=1, column=2, sticky="w", padx=10)
-        
-        self.llm_model_var = tk.StringVar(value="正在连接...")
+        tk.Label(settings_frame, text="选择模型:").grid(row=0, column=2, sticky="w", padx=10)
+        self.llm_model_var = tk.StringVar(value=self.settings.get("llm_model", "gemini-3.1-pro-preview"))
         self.llm_combo = ttk.Combobox(settings_frame, textvariable=self.llm_model_var, values=[], width=22, state="disabled")
-        self.llm_combo.grid(row=1, column=3, sticky="w", padx=5)
+        self.llm_combo.grid(row=0, column=3, sticky="w", padx=5)
         
-        self.model_status_label = tk.Label(settings_frame, text="", fg="red", font=("Microsoft YaHei", 9))
-        self.model_status_label.grid(row=1, column=4, sticky="w")
+        self.default_btn = ttk.Button(settings_frame, text="设为默认", width=8, command=self.save_as_default)
+        self.default_btn.grid(row=0, column=4, sticky="w", padx=5)
+
+        # API Key Row
+        tk.Label(settings_frame, text="API Key:").grid(row=1, column=0, sticky="w", pady=5)
+        self.api_key_var = tk.StringVar()
+        self.api_key_entry = ttk.Entry(settings_frame, textvariable=self.api_key_var, width=35, show="*")
+        self.api_key_entry.grid(row=1, column=1, columnspan=2, sticky="w", padx=5)
+        
+        ttk.Button(settings_frame, text="保存该密钥", command=self.save_current_vendor_key, width=12).grid(row=1, column=3, sticky="w", padx=5)
         
         # Test Connection Button
         self.test_btn = ttk.Button(settings_frame, text="测试连接", width=8, command=self.test_api)
-        self.test_btn.grid(row=1, column=5, sticky="w", padx=5)
+        self.test_btn.grid(row=1, column=4, sticky="w", padx=5)
         
-        # Start async model fetch
-        threading.Thread(target=self.fetch_models, daemon=True).start()
-        
-        # Style (Content) - Moved to Row 2
-        tk.Label(settings_frame, text="语气:").grid(row=2, column=0, sticky="w", pady=5)
+        # Whisper Model row
+        tk.Label(settings_frame, text="转录模型:").grid(row=2, column=0, sticky="w")
+        self.model_var = tk.StringVar(value=self.settings.get("model", "large-v2"))
+        ttk.Combobox(settings_frame, textvariable=self.model_var, values=["large-v3-turbo", "large-v3", "large-v2", "medium"], width=15, state="readonly").grid(row=2, column=1, sticky="w", padx=5)
+
+        # Tone Selection (Style)
+        tk.Label(settings_frame, text="内容语气:").grid(row=2, column=2, sticky="w", padx=10)
         self.style_var = tk.StringVar(value=self.settings.get("style", "casual"))
-        ttk.Combobox(settings_frame, textvariable=self.style_var, values=["casual", "formal", "edgy"], width=15, state="readonly").grid(row=2, column=1, sticky="w", padx=5)
+        ttk.Combobox(settings_frame, textvariable=self.style_var, values=["casual", "formal", "edgy"], width=15, state="readonly").grid(row=2, column=3, sticky="w", padx=5)
+
+        self.model_status_label = tk.Label(settings_frame, text="", fg="red", font=("Microsoft YaHei", 8))
+        self.model_status_label.grid(row=2, column=4, sticky="w")
+        
+        # Start async initial load
+        self.on_vendor_change(None)
 
         # --- Advanced Style Section ---
         style_frame = ttk.LabelFrame(root, text="字幕样式 (Subtitle Style)", padding=10)
@@ -427,104 +432,184 @@ class AutoSubGUI:
             self.root.after(0, lambda: self.start_btn.config(state="normal", text="开始处理 (Start Process)"))
 
 
-    def fetch_models(self):
+    def on_vendor_change(self, event):
+        vendor_name = self.vendor_var.get()
+        vendor_id = self.vendor_display_map[vendor_name]
+        
+        # Map vendor_id to env key
+        env_map = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "moonshot": "MOONSHOT_API_KEY",
+            "dashscope": "DASHSCOPE_API_KEY",
+            "zhipu": "ZHIPUAI_API_KEY"
+        }
+        env_key = env_map[vendor_id]
+        
+        current_key = os.environ.get(env_key, "")
+        self.api_key_var.set(current_key)
+        
+        # Update model list
+        # If the current model is already the one in settings, don't show "Loading..." to avoid flicker/racing
+        if self.llm_model_var.get() != self.settings.get("llm_model") or vendor_name != self.settings.get("llm_vendor"):
+            self.llm_model_var.set("正在获取模型...")
+            
+        self.llm_combo.config(state="disabled")
+        threading.Thread(target=self.fetch_models_for_vendor, args=(vendor_id, env_key), daemon=True).start()
+
+    def fetch_models_for_vendor(self, vendor_id, env_key):
         try:
-            client = gemini_utils.GeminiClient()
-            models = client.list_accessible_models()
+            from llm_utils import LLMProvider, LLMClient
+            provider = LLMProvider(vendor_id)
+            client = LLMClient() # Will use existing env vars
+            
+            models = client.list_models_by_provider(provider)
             
             if models:
-                # Add auto-best to top
-                final_list = ["auto-best"] + models
-                self.root.after(0, lambda: self.update_model_ui(final_list, True))
+                 self.root.after(0, lambda: self.update_model_ui(models, True))
             else:
-                self.root.after(0, lambda: self.update_model_ui([], False, "无可用模型"))
-                
+                 msg = "缺少 Key" if not os.environ.get(env_key) else "无可获取模型"
+                 self.root.after(0, lambda: self.update_model_ui([], False, msg))
         except Exception as e:
-            err_msg = str(e)
-            msg = "缺少API Key" if "API Key" in err_msg else "连接失败"
-            self.root.after(0, lambda: self.update_model_ui([], False, msg))
+            self.root.after(0, lambda: self.update_model_ui([], False, "连接失败"))
 
     def update_model_ui(self, models, success, error_msg=""):
         if success:
             self.llm_combo.config(state="readonly", values=models)
-            # Priority 1: User specified default
-            pref_model = self.settings.get("llm_model")
-            if pref_model in models:
-                 self.llm_model_var.set(pref_model)
-            # Priority 2: Fallback logic
-            elif "gemini-3.1-pro-preview" in models:
-                 self.llm_model_var.set("gemini-3.1-pro-preview")
-            elif "gemini-3-pro-preview" in models:
-                 self.llm_model_var.set("gemini-3-pro-preview")
-            elif "gemini-3.1-pro" in models:
-                 self.llm_model_var.set("gemini-3.1-pro")
-            elif "gemini-3-pro" in models:
-                 self.llm_model_var.set("gemini-3-pro")
-            elif "auto-best" in models:
-                 self.llm_model_var.set("auto-best")
-            elif models:
-                 self.llm_model_var.set(models[0])
+            current = self.llm_model_var.get()
+            saved_model = self.settings.get("llm_model")
+            saved_vendor = self.settings.get("llm_vendor")
+            current_vendor = self.vendor_var.get()
+
+            # Logic to decide which model to select:
+            # 1. If current value is valid and in the list, keep it.
+            # 2. If it's the saved vendor and the saved model is in the list, use it.
+            # 3. Fallback to common stable models.
+            
+            if current in models:
+                pass # Keep it
+            elif current_vendor == saved_vendor and saved_model in models:
+                self.llm_model_var.set(saved_model)
+            else:
+                if "gemini-1.5-flash" in models: self.llm_model_var.set("gemini-1.5-flash")
+                elif "gpt-4o-mini" in models: self.llm_model_var.set("gpt-4o-mini")
+                elif "glm-4-flash" in models: self.llm_model_var.set("glm-4-flash")
+                elif "moonshot-v1-8k" in models: self.llm_model_var.set("moonshot-v1-8k")
+                elif models: self.llm_model_var.set(models[0])
+                
             self.model_status_label.config(text="")
         else:
             self.llm_combo.config(state="disabled")
-            self.llm_model_var.set("无法连接")
+            self.llm_model_var.set("不可用")
             self.model_status_label.config(text=f"⚠️ {error_msg}")
-            
-    def save_api_key(self):
+
+    def save_current_vendor_key(self):
+        vendor_name = self.vendor_var.get()
+        vendor_id = self.vendor_display_map[vendor_name]
         key = self.api_key_var.get().strip()
-        if not key:
-            messagebox.showwarning("提示", "API Key 不能为空")
-            return
-            
-        # 1. Update Env Var
-        os.environ["GEMINI_API_KEY"] = key
         
-        # 2. Write to .env
+        env_map = {
+            "gemini": "GEMINI_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "moonshot": "MOONSHOT_API_KEY",
+            "dashscope": "DASHSCOPE_API_KEY",
+            "zhipu": "ZHIPUAI_API_KEY"
+        }
+        env_key = env_map[vendor_id]
+        
+        self.save_api_keys({env_key: key})
+            
+    def open_keys_dialog(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("API 密钥配置 (LLM Keys)")
+        dialog.geometry("450x300")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Load current keys from env
+        keys_to_vars = {
+            "GEMINI_API_KEY": tk.StringVar(value=os.environ.get("GEMINI_API_KEY", "")),
+            "OPENAI_API_KEY": tk.StringVar(value=os.environ.get("OPENAI_API_KEY", "")),
+            "MOONSHOT_API_KEY": tk.StringVar(value=os.environ.get("MOONSHOT_API_KEY", "")),
+            "DASHSCOPE_API_KEY": tk.StringVar(value=os.environ.get("DASHSCOPE_API_KEY", "")),
+            "ZHIPUAI_API_KEY": tk.StringVar(value=os.environ.get("ZHIPUAI_API_KEY", "")),
+        }
+
+        labels = [
+            ("Gemini API Key:", "GEMINI_API_KEY"),
+            ("OpenAI API Key:", "OPENAI_API_KEY"),
+            ("Moonshot (Kimi):", "MOONSHOT_API_KEY"),
+            ("DashScope (Qwen):", "DASHSCOPE_API_KEY"),
+            ("Zhipu (GLM):", "ZHIPUAI_API_KEY"),
+        ]
+
+        for i, (label_text, key_name) in enumerate(labels):
+            tk.Label(dialog, text=label_text).grid(row=i, column=0, padx=10, pady=5, sticky="e")
+            entry = ttk.Entry(dialog, textvariable=keys_to_vars[key_name], width=40, show="*")
+            entry.grid(row=i, column=1, padx=10, pady=5, sticky="w")
+
+        def perform_save():
+            new_keys = {k: v.get().strip() for k, v in keys_to_vars.items()}
+            self.save_api_keys(new_keys)
+            # Update the main window reference if Gemini was changed
+            if new_keys["GEMINI_API_KEY"]:
+                self.api_key_var.set(new_keys["GEMINI_API_KEY"])
+            dialog.destroy()
+
+        ttk.Button(dialog, text="保存并更新 (Save & Update)", command=perform_save).grid(row=len(labels), column=0, columnspan=2, pady=15)
+
+    def save_api_keys(self, keys_dict):
+        """Saves a dictionary of API keys to env and .env file."""
         try:
+            # 1. Update Env Var
+            for k, v in keys_dict.items():
+                if v: os.environ[k] = v
+            
+            # 2. Write to .env
             lines = []
             if os.path.exists(ENV_PATH):
                 with open(ENV_PATH, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
             
-            # Check if key exists
-            found = False
-            new_lines = []
-            
-            # Filter out existing key lines to replace them
-            key_updated = False
+            # Key value map for replacement
+            current_config = {}
             for line in lines:
-                if line.strip().startswith("GEMINI_API_KEY="):
-                    if not key_updated:
-                        new_lines.append(f"GEMINI_API_KEY={key}\n")
-                        key_updated = True
-                elif line.strip().startswith("GOOGLE_API_KEY="):
-                    # Also update/remove legacy key if present to avoid confusion? 
-                    # Let's keep it if different, but usually we just care about GEMINI_API_KEY now.
-                    new_lines.append(line)
-                else:
-                    new_lines.append(line)
+                if '=' in line and not line.startswith('#'):
+                    k, v = line.split('=', 1)
+                    current_config[k.strip()] = v.strip()
             
-            if not key_updated:
-                if new_lines and not new_lines[-1].endswith('\n'):
-                    new_lines.append('\n')
-                new_lines.append(f"GEMINI_API_KEY={key}\n")
+            # Update with new keys
+            for k, v in keys_dict.items():
+                if v: current_config[k] = v
                 
+            # Reconstruct .env
             with open(ENV_PATH, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
+                for k, v in current_config.items():
+                    f.write(f"{k}={v}\n")
                 
             # Reload clients
-            if "gemini_utils" in sys.modules:
-               gemini_utils.GeminiClient(api_key=key) # Re-init singleton if we had one? 
-               # Actually gemini_utils._CLIENT is singleton. We should reset it.
-               gemini_utils._CLIENT = None
+            llm_utils._CLIENT = None
                
-            messagebox.showinfo("成功", "API Key 已保存并更新配置！")
+            messagebox.showinfo("成功", "API Keys 已保存并更新配置！")
             
             # Refresh Models
             self.model_status_label.config(text="刷新中...")
-            self.test_btn.config(state="normal")
-            threading.Thread(target=self.fetch_models, daemon=True).start()
+            self.on_vendor_change(None)
             
+        except Exception as e:
+            messagebox.showerror("错误", f"保存失败: {e}")
+
+    def save_as_default(self):
+        """Saves current vendor and model to settings.json."""
+        self.settings['llm_vendor'] = self.vendor_var.get()
+        self.settings['llm_model'] = self.llm_model_var.get()
+        
+        settings_file = os.path.join(PROJECT_ROOT, "settings.json")
+        try:
+            with open(settings_file, "w", encoding="utf-8") as f:
+                json.dump(self.settings, f, indent=4, ensure_ascii=False)
+            messagebox.showinfo("成功", f"默认配置已保存：\n厂商：{self.settings['llm_vendor']}\n模型：{self.settings['llm_model']}")
         except Exception as e:
             messagebox.showerror("错误", f"保存失败: {e}")
 
@@ -535,15 +620,14 @@ class AutoSubGUI:
 
     def _run_test_api(self):
         try:
-            client = gemini_utils.GeminiClient()
+            from llm_utils import LLMClient
+            client = LLMClient()
             model_name = self.llm_model_var.get()
             
             # Sanity check
-            if not model_name or "连接" in model_name: 
-                model_name = "gemini-3-flash-preview"
-            if model_name == "auto-best": 
-                model_name = "gemini-3-flash-preview"
-                
+            if not model_name or "连接" in model_name or "加载" in model_name: 
+                model_name = "gemini-1.5-flash"
+            
             # Try a simple prompt
             res = client.generate_content("Say OK", model_name=model_name)
             
@@ -552,7 +636,7 @@ class AutoSubGUI:
                 self.test_btn.config(state="normal", text="测试连接")
                 # Refresh list if it was empty
                 if not self.llm_combo['values']:
-                   self.fetch_models()
+                   self.on_vendor_change(None)
                    
             def show_fail(msg):
                 messagebox.showerror("测试失败", msg)
