@@ -33,7 +33,16 @@ Run the following command:
 python Library\Tools\autosub\autosub_gui.py
 ```
 
-### 2. AI Agent Mode (IDE / Workspace)
+### 2. Cookie Configuration (For Restricted Videos)
+If you encounter YouTube bot detection or need to download Bilibili premium content, you must provide cookies:
+1. Install a browser extension: [Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/ccmclabimipcebeociikabmgepmeadon) or **EditThisCookie**.
+2. Log in to the target video site.
+3. Click the extension and export cookies in **Netscape format** as `cookies.txt`.
+4. **Usage**:
+   - **GUI**: Click "Browse..." in the "Cookies" row to load the file.
+   - **CLI**: Append `--cookies "path/to/cookies.txt"` to your command.
+
+### 3. AI Agent Mode (IDE / Workspace)
 If you are using an AI Agent (like Antigravity or CC), you can simply type:
 > `/autosub`
 

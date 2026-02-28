@@ -63,7 +63,7 @@ if getattr(sys, 'frozen', False):
     TOOLS_DIR = os.path.join(BUNDLE_DIR, "Library", "Tools")
     USER_DATA_DIR = os.path.join(os.path.expanduser("~"), "Documents", "AutoSub")
     PROJECT_ROOT = USER_DATA_DIR
-    BASE_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Projects")
+    BASE_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Project")
     env_path = os.path.join(PROJECT_ROOT, ".env")
     
     # In bundled mode, common is in BUNDLE_DIR/Library/Tools/common
@@ -80,7 +80,7 @@ else:
     else:
         PROJECT_ROOT = tmp_root
         
-    BASE_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Projects")
+    BASE_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Project")
     env_path = os.path.join(PROJECT_ROOT, ".env")
     
     # In dev mode, common is in d:\cc\Library\Tools\common
@@ -171,17 +171,17 @@ if os.path.exists(env_path):
                     if k and v: os.environ[k] = v.strip('"\'')
     except: pass
 
-def get_workdir(input_val):
+def get_workdir(input_val, base_output_dir):
     if input_val.startswith("http"):
-        return os.path.join(BASE_OUTPUT_DIR, "temp_" + str(int(time.time())))
+        return os.path.join(base_output_dir, "temp_" + str(int(time.time())))
     else:
         abs_path = os.path.abspath(input_val)
         try:
-            base = os.path.normpath(BASE_OUTPUT_DIR).lower()
+            base = os.path.normpath(base_output_dir).lower()
             current = os.path.normpath(abs_path).lower()
             if current.startswith(base): return os.path.dirname(abs_path)
         except: pass
-        return os.path.join(BASE_OUTPUT_DIR, os.path.splitext(os.path.basename(input_val))[0])
+        return os.path.join(base_output_dir, os.path.splitext(os.path.basename(input_val))[0])
 
 def get_video_title(url, cookies=None):
     """Fetches video title using download.py --get-title."""
@@ -207,7 +207,7 @@ def download_video(url, workdir, cookies=None):
     if not os.path.exists(workdir): os.makedirs(workdir)
     cmd = list(VDOWN_CMD) + [url, cookies or "", workdir]
     try: 
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
         for line in process.stdout:
             print(line.strip(), flush=True)
         process.wait()
@@ -232,7 +232,7 @@ def transcribe_video(video_path, workdir, model="large-v3-turbo"):
     print(f"🎙️ Transcribing {os.path.basename(video_path)}...", flush=True)
     cmd = list(TRANSCRIBER_CMD) + [video_path, "--model", model, "--output", workdir, "--no-gui"]
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', bufsize=1, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
         for line in process.stdout:
             print(line.strip(), flush=True)
         process.wait()
@@ -261,7 +261,7 @@ def merge_bilingual(src_srt, zh_srt, main_lang="cn", llm_model="gemini-3.1-pro-p
     env = os.environ.copy(); env["GEMINI_MODEL"] = llm_model
     
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=env)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=env, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
         for line in process.stdout:
             msg = line.strip()
             if "Progress:" in msg:
@@ -311,7 +311,7 @@ def burn_subtitle(video_path, srt_path, layout, main_lang, cn_font, en_font, cn_
 
     cmd = list(BURNSUB_CMD) + [video_path, ass_path, out_video, "--headless"]
     try:
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
         last_logs = []
         for line in process.stdout:
             msg = line.strip()
@@ -370,7 +370,16 @@ def main():
     parser.add_argument("--cn-color", default="Gold")
     parser.add_argument("--en-color", default="White")
     parser.add_argument("--no-bg-box", action="store_true")
+    parser.add_argument("--output-dir", help="Project root directory for output files")
     args = parser.parse_args()
+
+    # --- Directory Logic ---
+    final_output_dir = args.output_dir or DEFAULTS.get("output_dir") or BASE_OUTPUT_DIR
+    if not os.path.isabs(final_output_dir):
+        final_output_dir = os.path.abspath(os.path.join(PROJECT_ROOT, final_output_dir))
+    
+    # Update global-like state for this run
+    effective_base_output_dir = final_output_dir
 
     # 0. Intelligent Project Naming
     if args.input.startswith("http"):
@@ -378,14 +387,14 @@ def main():
         title = get_video_title(args.input, args.cookies)
         if title:
             safe_title = sanitize_filename(title)
-            workdir = os.path.join(BASE_OUTPUT_DIR, safe_title)
+            workdir = os.path.join(effective_base_output_dir, safe_title)
             print(f"📁 Project Folder: {safe_title}")
         else:
-            workdir = get_workdir(args.input)
+            workdir = get_workdir(args.input, effective_base_output_dir)
     else:
-        workdir = get_workdir(args.input)
+        workdir = get_workdir(args.input, effective_base_output_dir)
 
-    if not os.path.exists(workdir): os.makedirs(workdir)
+    if not os.path.exists(workdir): os.makedirs(workdir, exist_ok=True)
     
     # --- Initialize Workflow Logging ---
     log_path = os.path.join(workdir, "workflow.log")

@@ -31,7 +31,16 @@ AutoSub 是一款专业的“零点击”自动化工具，旨在实现视频下
 python Library\Tools\autosub\autosub_gui.py
 ```
 
-### 2. AI 智能体模式 (IDE / 工作区)
+### 2. Cookies 配置 (获取受限视频)
+如果遇到 YouTube 机器人验证（Bot Detection）或处理 Bilibili 会员专享视频，需配置 Cookies：
+1. 在浏览器安装扩展：[Get cookies.txt LOCALLY](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/ccmclabimipcebeociikabmgepmeadon) 或 **EditThisCookie**。
+2. 访问对应的视频网站并登录。
+3. 点击扩展，导出为 **Netscape 格式** 的 `cookies.txt`。
+4. **使用方法**：
+   - **GUI**：在“Cookies”栏点击“选择...”，加载该文件。
+   - **CLI**：在命令后添加 `--cookies "path/to/cookies.txt"`。
+
+### 3. AI 智能体模式 (IDE / 工作区)
 如果您正在使用支持智能体的工作空间（如 Antigravity 或 CC），只需输入：
 > `/autosub`
 

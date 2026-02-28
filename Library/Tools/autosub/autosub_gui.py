@@ -143,6 +143,11 @@ class AutoSubGUI:
         ttk.Entry(input_frame, textvariable=self.cookies_var, width=50).grid(row=1, column=1, padx=5, pady=2)
         ttk.Button(input_frame, text="选择...", command=self.browse_cookies).grid(row=1, column=2)
 
+        tk.Label(input_frame, text="项目根目录:").grid(row=2, column=0, sticky="w")
+        self.output_dir_var = tk.StringVar(value=self.settings.get("output_dir", ""))
+        ttk.Entry(input_frame, textvariable=self.output_dir_var, width=50).grid(row=2, column=1, padx=5, pady=2)
+        ttk.Button(input_frame, text="选择...", command=self.browse_output_dir).grid(row=2, column=2)
+
         # --- Settings Section ---
         settings_frame = ttk.LabelFrame(root, text="基础设置 (Basic Settings)", padding=10)
         settings_frame.pack(fill="x", padx=10, pady=5)
@@ -154,7 +159,9 @@ class AutoSubGUI:
             "OpenAI (ChatGPT)": "openai",
             "Moonshot (Kimi)": "moonshot",
             "Alibaba (Qwen)": "dashscope",
-            "Zhipu (GLM)": "zhipu"
+            "Zhipu (GLM)": "zhipu",
+            "DeepSeek": "deepseek",
+            "Silicon Flow (硅基流动)": "siliconflow"
         }
         vendor_default = self.settings.get("llm_vendor", "Google Gemini")
         self.vendor_var = tk.StringVar(value=vendor_default)
@@ -323,6 +330,10 @@ class AutoSubGUI:
         filename = filedialog.askopenfilename(filetypes=[("Txt", "*.txt")])
         if filename: self.cookies_var.set(filename)
 
+    def browse_output_dir(self):
+        dirname = filedialog.askdirectory()
+        if dirname: self.output_dir_var.set(dirname)
+
     def log_clear(self):
         self.log_text.config(state="normal")
         self.log_text.delete(1.0, "end")
@@ -399,6 +410,9 @@ class AutoSubGUI:
         if self.cookies_var.get():
             cmd.extend(["--cookies", self.cookies_var.get()])
             
+        if self.output_dir_var.get():
+            cmd.extend(["--output-dir", self.output_dir_var.get()])
+            
         threading.Thread(target=self.run_subprocess, args=(cmd,), daemon=True).start()
 
     def run_subprocess(self, cmd):
@@ -409,7 +423,7 @@ class AutoSubGUI:
             env["PYTHONUNBUFFERED"] = "1"
             
             # Store process ref for killing
-            self.current_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=env)
+            self.current_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', env=env, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
             process = self.current_process
             
             for line in process.stdout:
@@ -442,7 +456,9 @@ class AutoSubGUI:
             "openai": "OPENAI_API_KEY",
             "moonshot": "MOONSHOT_API_KEY",
             "dashscope": "DASHSCOPE_API_KEY",
-            "zhipu": "ZHIPUAI_API_KEY"
+            "zhipu": "ZHIPUAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "siliconflow": "SILICONFLOW_API_KEY"
         }
         env_key = env_map[vendor_id]
         
@@ -495,6 +511,8 @@ class AutoSubGUI:
                 elif "gpt-4o-mini" in models: self.llm_model_var.set("gpt-4o-mini")
                 elif "glm-4-flash" in models: self.llm_model_var.set("glm-4-flash")
                 elif "moonshot-v1-8k" in models: self.llm_model_var.set("moonshot-v1-8k")
+                elif "deepseek-chat" in models: self.llm_model_var.set("deepseek-chat")
+                elif "deepseek-ai/DeepSeek-V3" in models: self.llm_model_var.set("deepseek-ai/DeepSeek-V3")
                 elif models: self.llm_model_var.set(models[0])
                 
             self.model_status_label.config(text="")
@@ -513,7 +531,9 @@ class AutoSubGUI:
             "openai": "OPENAI_API_KEY",
             "moonshot": "MOONSHOT_API_KEY",
             "dashscope": "DASHSCOPE_API_KEY",
-            "zhipu": "ZHIPUAI_API_KEY"
+            "zhipu": "ZHIPUAI_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "siliconflow": "SILICONFLOW_API_KEY"
         }
         env_key = env_map[vendor_id]
         
@@ -522,7 +542,7 @@ class AutoSubGUI:
     def open_keys_dialog(self):
         dialog = tk.Toplevel(self.root)
         dialog.title("API 密钥配置 (LLM Keys)")
-        dialog.geometry("450x300")
+        dialog.geometry("450x400")
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
@@ -534,6 +554,8 @@ class AutoSubGUI:
             "MOONSHOT_API_KEY": tk.StringVar(value=os.environ.get("MOONSHOT_API_KEY", "")),
             "DASHSCOPE_API_KEY": tk.StringVar(value=os.environ.get("DASHSCOPE_API_KEY", "")),
             "ZHIPUAI_API_KEY": tk.StringVar(value=os.environ.get("ZHIPUAI_API_KEY", "")),
+            "DEEPSEEK_API_KEY": tk.StringVar(value=os.environ.get("DEEPSEEK_API_KEY", "")),
+            "SILICONFLOW_API_KEY": tk.StringVar(value=os.environ.get("SILICONFLOW_API_KEY", "")),
         }
 
         labels = [
@@ -542,6 +564,8 @@ class AutoSubGUI:
             ("Moonshot (Kimi):", "MOONSHOT_API_KEY"),
             ("DashScope (Qwen):", "DASHSCOPE_API_KEY"),
             ("Zhipu (GLM):", "ZHIPUAI_API_KEY"),
+            ("DeepSeek Key:", "DEEPSEEK_API_KEY"),
+            ("Silicon Flow:", "SILICONFLOW_API_KEY"),
         ]
 
         for i, (label_text, key_name) in enumerate(labels):
@@ -604,6 +628,7 @@ class AutoSubGUI:
         """Saves current vendor and model to settings.json."""
         self.settings['llm_vendor'] = self.vendor_var.get()
         self.settings['llm_model'] = self.llm_model_var.get()
+        self.settings['output_dir'] = self.output_dir_var.get()
         
         settings_file = os.path.join(PROJECT_ROOT, "settings.json")
         try:

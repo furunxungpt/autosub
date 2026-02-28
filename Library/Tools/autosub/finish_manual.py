@@ -80,10 +80,10 @@ BURNSUB_CMD = [sys.executable, os.path.join(TOOLS_DIR, "hardsubber", "burn_engin
 ass_path = bi_srt_path.replace(".srt", ".ass")
 print("🎬 Generating ASS...")
 import subprocess
-subprocess.run(list(SRT2ASS_CMD) + [bi_srt_path, ass_path, "--layout", "bilingual", "--main-lang", "cn", "--cn-font", "KaiTi"], check=True)
+subprocess.run(list(SRT2ASS_CMD) + [bi_srt_path, ass_path, "--layout", "bilingual", "--main-lang", "cn", "--cn-font", "KaiTi"], check=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
 
 out_video = video_path.replace(".mp4", "_hardsub.mp4")
 print("🔥 Burning...")
-subprocess.run(list(BURNSUB_CMD) + [video_path, ass_path, out_video], check=True)
+subprocess.run(list(BURNSUB_CMD) + [video_path, ass_path, out_video], check=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
 
 print(f"✨ ALL DONE! Video saved at: {out_video}")
